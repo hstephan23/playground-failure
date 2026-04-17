@@ -1,6 +1,7 @@
 #include "playground/scenario.h"
 #include "playground/event.h"
 #include "playground/runner.h"
+#include "playground/chaos_io.h"   /* chaos_clock_seed */
 #include "rand.h"
 
 #include <errno.h>
@@ -57,15 +58,26 @@ void pg_emit(pg_runctx_t *ctx, const pg_event_t *ev) {
     if (!ctx) ctx = g_runctx;
     if (!ctx || ctx->event_fd_w < 0 || !ev) return;
     pg_event_t copy = *ev;
+    copy.magic   = PG_EVENT_MAGIC;
+    copy.version = PG_EVENT_VERSION;
     if (copy.ts_ns == 0) copy.ts_ns = now_ns() - ctx->start_ns;
     if (copy.thread_tag == 0) {
         copy.thread_tag = g_thread_tag ? g_thread_tag : ctx->thread_tag;
     }
-    /* Single write of sizeof(pg_event_t) (256B) is atomic vs. other writers
-     * because POSIX guarantees writes <= PIPE_BUF (>= 512 on macOS/Linux)
-     * are atomic on pipes. */
-    ssize_t w = write(ctx->event_fd_w, &copy, sizeof(copy));
-    (void)w;
+    /* Loop on partial writes / EINTR. POSIX guarantees writes <= PIPE_BUF
+     * (>= 512 on macOS/Linux) are atomic on pipes vs. other writers, so the
+     * record itself never interleaves with another thread's emit; the loop
+     * just handles signal interruption and writes that the kernel splits. */
+    const uint8_t *p   = (const uint8_t *)&copy;
+    size_t         off = 0;
+    while (off < sizeof(copy)) {
+        ssize_t w = write(ctx->event_fd_w, p + off, sizeof(copy) - off);
+        if (w < 0) {
+            if (errno == EINTR) continue;
+            return;     /* pipe broken; parent has gone */
+        }
+        off += (size_t)w;
+    }
 }
 
 void pg_logf(pg_runctx_t *ctx, const char *fmt, ...) {
@@ -94,8 +106,14 @@ void pg_gauge (pg_runctx_t *c, const char *k, int64_t v) { emit_kv(c, PG_EV_GAUG
 void pg_expect(pg_runctx_t *c, const char *k, int64_t v) { emit_kv(c, PG_EV_EXPECT,  k, v); }
 void pg_actual(pg_runctx_t *c, const char *k, int64_t v) { emit_kv(c, PG_EV_ACTUAL,  k, v); }
 
-void pg_fault(pg_runctx_t *ctx, const char *what) {
-    pg_event_t ev = { .kind = PG_EV_FAULT };
+void pg_sut_fault(pg_runctx_t *ctx, const char *what) {
+    pg_event_t ev = { .kind = PG_EV_SUT_FAULT };
+    snprintf(ev.text, sizeof(ev.text), "%s", what ? what : "");
+    pg_emit(ctx, &ev);
+}
+
+void pg_watchdog(pg_runctx_t *ctx, const char *what) {
+    pg_event_t ev = { .kind = PG_EV_WATCHDOG };
     snprintf(ev.text, sizeof(ev.text), "%s", what ? what : "");
     pg_emit(ctx, &ev);
 }
@@ -107,14 +125,16 @@ void pg_done(pg_runctx_t *ctx) {
 
 const char *pg_event_kind_name(pg_event_kind_t k) {
     switch (k) {
-    case PG_EV_LOG:     return "log";
-    case PG_EV_COUNTER: return "counter";
-    case PG_EV_GAUGE:   return "gauge";
-    case PG_EV_PHASE:   return "phase";
-    case PG_EV_EXPECT:  return "expect";
-    case PG_EV_ACTUAL:  return "actual";
-    case PG_EV_FAULT:   return "fault";
-    case PG_EV_DONE:    return "done";
+    case PG_EV_LOG:         return "log";
+    case PG_EV_COUNTER:     return "counter";
+    case PG_EV_GAUGE:       return "gauge";
+    case PG_EV_PHASE:       return "phase";
+    case PG_EV_EXPECT:      return "expect";
+    case PG_EV_ACTUAL:      return "actual";
+    case PG_EV_SUT_FAULT:   return "sut_fault";
+    case PG_EV_DONE:        return "done";
+    case PG_EV_CHILD_CRASH: return "child_crash";
+    case PG_EV_WATCHDOG:    return "watchdog";
     }
     return "?";
 }
@@ -135,7 +155,11 @@ const char *pg_category_name(pg_category_t cat) {
 static int g_child_event_fd = -1;
 
 static void child_fault_handler(int sig) {
-    pg_event_t ev = { .kind = PG_EV_FAULT };
+    pg_event_t ev = { 0 };
+    /* Hand-roll header fields for async-signal safety; pg_emit isn't called. */
+    ev.magic   = PG_EVENT_MAGIC;
+    ev.version = PG_EVENT_VERSION;
+    ev.kind    = PG_EV_CHILD_CRASH;
     const char *prefix = "child crashed: ";
     const char *name   = "signal";
     switch (sig) {
@@ -152,11 +176,13 @@ static void child_fault_handler(int sig) {
     ev.text[i] = '\0';
 
     if (g_child_event_fd >= 0) {
+        /* Best-effort single write; if it short-writes, the parent's resync
+         * will skip the byte stream until the next 256B boundary. */
         ssize_t w = write(g_child_event_fd, &ev, sizeof(ev));
         (void)w;
     }
-    /* re-raise with default handler so the parent sees the right exit status */
-    signal(sig, SIG_DFL);
+    /* SA_RESETHAND already restored SIG_DFL on entry, so raising re-enters
+     * the default handler and terminates with the right exit status. */
     raise(sig);
 }
 
@@ -202,11 +228,23 @@ int pg_run_start(const pg_scenario_t *s, uint64_t seed, pg_run_handle_t *out) {
         ctx.thread_tag = 0;
         ctx.start_ns   = now_ns();
         pg_xosh_seed(&ctx.rng, seed);
+        /* Seed the process-global clock RNG so jitter is reproducible across
+         * runs with the same scenario seed. Distinct mask so it doesn't
+         * collide with the scenario's own RNG stream. */
+        chaos_clock_seed(seed ^ 0xC10CC10CC10CC10CULL);
         g_runctx = &ctx;
 
-        /* basic resource caps so a runaway scenario can't take down the box */
+        /* Resource caps so a runaway scenario can't take down the box.
+         * Configurable via env so time/IO scenarios with intentionally long
+         * waits can be granted more headroom. */
+        const char *limit_env = getenv("PG_CPU_LIMIT_SECONDS");
+        rlim_t      cpu_limit = 30;
+        if (limit_env && *limit_env) {
+            unsigned long v = strtoul(limit_env, NULL, 10);
+            if (v > 0) cpu_limit = (rlim_t)v;
+        }
         struct rlimit rl;
-        rl.rlim_cur = rl.rlim_max = 30;
+        rl.rlim_cur = rl.rlim_max = cpu_limit;
         setrlimit(RLIMIT_CPU, &rl);
 
         void *state = NULL;
@@ -254,6 +292,16 @@ int pg_run_poll(pg_run_handle_t *h, pg_event_t *ev_out, int timeout_ms) {
             return -1;
         }
         got += (size_t)n;
+    }
+    /* Validate magic + version. If a child crashed mid-write, the next
+     * record may be misaligned garbage; this catches it loudly instead
+     * of silently decoding wrong fields. */
+    if (ev_out->magic != PG_EVENT_MAGIC || ev_out->version != PG_EVENT_VERSION) {
+        fprintf(stderr,
+            "pg_run_poll: bad event header (magic=0x%04x version=%u expected 0x%04x v%u)\n",
+            (unsigned)ev_out->magic, (unsigned)ev_out->version,
+            (unsigned)PG_EVENT_MAGIC, (unsigned)PG_EVENT_VERSION);
+        return -1;
     }
     return 1;
 }

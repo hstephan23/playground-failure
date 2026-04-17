@@ -133,6 +133,12 @@ int main(int argc, char **argv) {
 
     if (list) { list_scenarios(); return 0; }
 
+    if (seed == 0) {
+        fprintf(stderr,
+            "warning: seed=0 is internally remapped to a fixed default for the\n"
+            "         RNG; pass a non-zero --seed for true reproducibility.\n");
+    }
+
     if (scenario_id) {
         return run_headless(scenario_id, seed, json);
     }

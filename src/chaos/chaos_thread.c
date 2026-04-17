@@ -3,6 +3,7 @@
 #include "playground/scenario.h"
 
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,10 +16,10 @@ extern __thread uint32_t g_thread_tag;
 extern uint32_t          pg_alloc_thread_tag(void);
 
 struct chaos_thread {
-    pthread_t pt;
-    char      tag_name[32];
-    uint32_t  tag_id;
-    int       joined;
+    pthread_t   pt;
+    char        tag_name[32];
+    uint32_t    tag_id;
+    _Atomic int stop_flag;
 };
 
 typedef struct {
@@ -60,19 +61,26 @@ chaos_thread_t *chaos_thread_spawn(void *(*fn)(void *), void *arg, const char *t
 int chaos_thread_join(chaos_thread_t *t) {
     if (!t) return -1;
     int rc = pthread_join(t->pt, NULL);
-    t->joined = 1;
     free(t);
     return rc == 0 ? 0 : -1;
 }
 
 int chaos_thread_cancel(chaos_thread_t *t) {
     if (!t) return -1;
+    /* Set the cooperative flag first so a polling thread sees it even if
+     * pthread_cancel can't reach it (no nearby cancellation point). */
+    atomic_store_explicit(&t->stop_flag, 1, memory_order_release);
     return pthread_cancel(t->pt) == 0 ? 0 : -1;
 }
 
+int chaos_thread_should_stop(chaos_thread_t *t) {
+    if (!t) return 0;
+    return atomic_load_explicit(&t->stop_flag, memory_order_acquire);
+}
+
 typedef struct {
-    pthread_t target;
-    uint64_t  after_ns;
+    chaos_thread_t *target;     /* must outlive after_ns; see header */
+    uint64_t        after_ns;
 } cancel_arg_t;
 
 static void *cancel_after_fn(void *arg) {
@@ -82,7 +90,7 @@ static void *cancel_after_fn(void *arg) {
         .tv_nsec = (long)  (ca->after_ns % 1000000000ULL),
     };
     nanosleep(&ts, NULL);
-    pthread_cancel(ca->target);
+    chaos_thread_cancel(ca->target);   /* sets flag + pthread_cancel */
     free(ca);
     return NULL;
 }
@@ -91,7 +99,7 @@ int chaos_thread_cancel_at_ns(chaos_thread_t *t, uint64_t after_ns) {
     if (!t) return -1;
     cancel_arg_t *ca = (cancel_arg_t *)malloc(sizeof(*ca));
     if (!ca) return -1;
-    ca->target   = t->pt;
+    ca->target   = t;
     ca->after_ns = after_ns;
     pthread_t cancel_th;
     if (pthread_create(&cancel_th, NULL, cancel_after_fn, ca) != 0) {
@@ -128,9 +136,9 @@ static void *watchdog_fn(void *arg) {
 
     char msg[128];
     snprintf(msg, sizeof(msg), "watchdog: %s", wd->what);
-    pg_fault(NULL, msg);
+    pg_watchdog(NULL, msg);
     /* Hard exit — the scenario is hung; only way out is to terminate the child.
-     * Parent sees PG_EV_FAULT then EOF, reaps exit status 2. */
+     * Parent sees PG_EV_WATCHDOG then EOF, reaps exit status 2. */
     _exit(2);
 }
 

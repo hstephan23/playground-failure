@@ -66,7 +66,7 @@ Rebuild and it appears.
 | `pg_gauge(ctx, "key", value)` | gauge, rendered as a `####....` bar in the TUI (auto-scaled to seen min/max) |
 | `pg_expect(ctx, "key", value)` | what the user *should* see — appears yellow |
 | `pg_actual(ctx, "key", value)` | what they actually get — appears green if matches expect, red if not |
-| `pg_fault(ctx, "what")` | explicit failure marker — appears red/bold |
+| `pg_sut_fault(ctx, "what")` | scenario-detected failure (the SUT misbehaved) — appears red/bold |
 | `pg_done(ctx)` | runner emits this automatically; you don't need to call it |
 
 All of these are safe to call from any thread inside the scenario child; the underlying pipe writes are atomic.

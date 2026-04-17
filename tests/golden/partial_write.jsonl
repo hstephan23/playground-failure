@@ -1,0 +1,10 @@
+{"kind":"phase","thread":0,"key":"","num":0,"text":"naive call: write(fd, buf, 2048) -- expect 2048 back"}
+{"kind":"expect","thread":0,"key":"naive_returned","num":2048,"text":""}
+{"kind":"actual","thread":0,"key":"naive_returned","num":137,"text":""}
+{"kind":"log","thread":0,"key":"","num":0,"text":"naive write returned 137 of 2048 bytes -- the other 1911 are LOST"}
+{"kind":"phase","thread":0,"key":"","num":0,"text":"correct call: loop on partial writes"}
+{"kind":"expect","thread":0,"key":"looped_total","num":2048,"text":""}
+{"kind":"actual","thread":0,"key":"looped_total","num":2048,"text":""}
+{"kind":"counter","thread":0,"key":"loop_iterations","num":15,"text":""}
+{"kind":"log","thread":0,"key":"","num":0,"text":"loop wrote 2048 bytes in 15 calls"}
+{"kind":"done","thread":0,"key":"","num":0,"text":""}

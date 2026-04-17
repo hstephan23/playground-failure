@@ -41,7 +41,7 @@ static int rc_run(pg_runctx_t *ctx, void *state) {
         args[i].tag     = i + 1;
         args[i].counter = &counter;
         if (pthread_create(&th[i], NULL, writer_fn, &args[i]) != 0) {
-            pg_fault(ctx, "pthread_create failed");
+            pg_sut_fault(ctx, "pthread_create failed");
             return 1;
         }
         pg_logf(ctx, "spawned writer %d", i + 1);

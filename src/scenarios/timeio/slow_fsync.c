@@ -9,8 +9,8 @@
 static int sf_run(pg_runctx_t *ctx, void *state) {
     (void)state;
 
-    int fd = chaos_io_open("/tmp/scratch", O_WRONLY);
-    if (fd < 0) { pg_fault(ctx, "chaos_io_open failed"); return 1; }
+    int fd = chaos_io_open("/tmp/scratch");
+    if (fd < 0) { pg_sut_fault(ctx, "chaos_io_open failed"); return 1; }
     chaos_io_set_fsync_delay(fd, 1500ULL * 1000000ULL);   /* 1.5 s */
 
     pg_phase(ctx, "writing 1 KiB");

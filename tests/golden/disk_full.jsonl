@@ -1,0 +1,7 @@
+{"kind":"phase","thread":0,"key":"","num":0,"text":"writing 64 chunks of 64 bytes; quota is 1024 bytes"}
+{"kind":"expect","thread":0,"key":"bytes_written_ok","num":1024,"text":""}
+{"kind":"actual","thread":0,"key":"bytes_written_ok","num":1024,"text":""}
+{"kind":"counter","thread":0,"key":"enospc_errors","num":48,"text":""}
+{"kind":"log","thread":0,"key":"","num":0,"text":"first ENOSPC at iteration 16; 48 total ENOSPC errors"}
+{"kind":"log","thread":0,"key":"","num":0,"text":"code that ignores the return value of write() silently loses data here."}
+{"kind":"done","thread":0,"key":"","num":0,"text":""}

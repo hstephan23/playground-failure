@@ -1,0 +1,8 @@
+{"kind":"phase","thread":0,"key":"","num":0,"text":"naive timeout: while (now - start < 100ms)"}
+{"kind":"log","thread":0,"key":"","num":0,"text":"we'll start the loop, then have someone jump the clock backward 30s."}
+{"kind":"expect","thread":0,"key":"loop_terminated","num":1,"text":""}
+{"kind":"log","thread":0,"key":"","num":0,"text":"  ...someone bumps the clock backward 30s mid-loop"}
+{"kind":"actual","thread":0,"key":"loop_terminated","num":1,"text":""}
+{"kind":"counter","thread":0,"key":"iterations","num":1000,"text":""}
+{"kind":"log","thread":0,"key":"","num":0,"text":"loop terminated after 1000 iterations (safety net engaged)"}
+{"kind":"done","thread":0,"key":"","num":0,"text":""}

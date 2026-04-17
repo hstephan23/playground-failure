@@ -7,7 +7,7 @@
 static int df_run(pg_runctx_t *ctx, void *state) {
     (void)state;
     chaos_arena_t *a = chaos_arena_create(64 * 1024, CHAOS_ARENA_REDZONES);
-    if (!a) { pg_fault(ctx, "arena create failed"); return 1; }
+    if (!a) { pg_sut_fault(ctx, "arena create failed"); return 1; }
 
     pg_phase(ctx, "alloc 128 bytes");
     void *p = chaos_arena_alloc(a, 128);
@@ -25,7 +25,7 @@ static int df_run(pg_runctx_t *ctx, void *state) {
     pg_actual(ctx, "double_free_caught", r2 == -1 ? 1 : 0);
 
     if (r2 == -1) {
-        pg_fault(ctx, "double-free detected");
+        pg_sut_fault(ctx, "double-free detected");
         pg_logf(ctx, "with libc malloc this would corrupt the freelist; the next");
         pg_logf(ctx, "alloc could return a pointer someone else still uses.");
     }

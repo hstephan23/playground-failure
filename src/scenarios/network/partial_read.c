@@ -13,7 +13,7 @@ static int pr_run(pg_runctx_t *ctx, void *state) {
     chaos_net_knobs_t k = { .max_chunk_bytes = 17 };  /* fragment but no loss */
     chaos_pair_t pair;
     if (chaos_net_pair(&pair, &k, pg_runctx_seed(ctx)) < 0) {
-        pg_fault(ctx, "chaos_net_pair failed");
+        pg_sut_fault(ctx, "chaos_net_pair failed");
         return 1;
     }
 

@@ -4,11 +4,12 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-/* Open a real temporary file (the virtpath is informational). Returns a real
- * fd you can pass to the chaos_io_* helpers below, or to plain syscalls if
- * you want unmolested behavior. The file is unlinked immediately so it
- * disappears when closed. */
-int     chaos_io_open (const char *virtpath, int flags);
+/* Open a real temporary file (the virtpath is informational, used only to
+ * disambiguate paths in user-visible logs). Returns a real fd you can pass
+ * to the chaos_io_* helpers below, or to plain syscalls if you want
+ * unmolested behavior. The file is unlinked immediately so it disappears
+ * when closed. Always opened O_RDWR + O_CREAT under the hood. */
+int     chaos_io_open (const char *virtpath);
 
 /* Wrapped read/write/fsync/close honoring the per-fd knobs set below. */
 ssize_t chaos_io_write(int fd, const void *buf, size_t n);
@@ -31,3 +32,7 @@ void    chaos_io_set_fsync_delay (int fd, uint64_t ns);
 uint64_t chaos_clock_now_ns       (void);
 void     chaos_clock_skew_set     (int64_t  offset_ns);
 void     chaos_clock_jitter_set   (uint64_t max_ns);
+
+/* Seed the jitter RNG. Called by the runner before each scenario so that the
+ * jitter pattern is reproducible across runs with the same scenario seed. */
+void     chaos_clock_seed         (uint64_t seed);

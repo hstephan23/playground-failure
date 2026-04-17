@@ -29,7 +29,7 @@ static int cj_run(pg_runctx_t *ctx, void *state) {
     pg_count (ctx, "iterations",     iters);
 
     if (!terminated) {
-        pg_fault(ctx, "loop did NOT terminate -- skew broke the timeout math");
+        pg_sut_fault(ctx, "loop did NOT terminate -- skew broke the timeout math");
         pg_logf (ctx, "the timeout used `now - start`. After the skew, now < start,");
         pg_logf (ctx, "so the elapsed time is negative and the loop runs forever.");
     } else {

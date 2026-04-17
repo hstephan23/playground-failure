@@ -36,7 +36,7 @@ static int cr_run(pg_runctx_t *ctx, void *state) {
 
     int sp[2];
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, sp) < 0) {
-        pg_fault(ctx, "socketpair failed");
+        pg_sut_fault(ctx, "socketpair failed");
         return 1;
     }
     int my_fd   = sp[0];

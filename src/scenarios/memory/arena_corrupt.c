@@ -8,7 +8,7 @@
 static int ac_run(pg_runctx_t *ctx, void *state) {
     (void)state;
     chaos_arena_t *a = chaos_arena_create(64 * 1024, CHAOS_ARENA_REDZONES);
-    if (!a) { pg_fault(ctx, "arena create failed"); return 1; }
+    if (!a) { pg_sut_fault(ctx, "arena create failed"); return 1; }
 
     pg_phase(ctx, "alloc 32 bytes (with 16B redzones front & back)");
     char *p = (char *)chaos_arena_alloc(a, 32);
@@ -22,7 +22,7 @@ static int ac_run(pg_runctx_t *ctx, void *state) {
     pg_actual(ctx, "redzones_corrupt", corrupted);
 
     if (corrupted > 0) {
-        pg_fault(ctx, "out-of-bounds write detected by redzone scan");
+        pg_sut_fault(ctx, "out-of-bounds write detected by redzone scan");
         pg_logf (ctx, "without redzones, this write would silently corrupt the next allocation.");
         pg_logf (ctx, "the bug would manifest as a crash or wrong value far from the cause.");
     } else {

@@ -11,22 +11,27 @@
 #include <time.h>
 #include <unistd.h>
 
+/* Forwarder args are embedded in pair_internal_t (no separate malloc) and
+ * carry a pointer back to the owning pair so they can read knobs. */
+typedef struct pair_internal pair_internal_t;
+
 typedef struct {
+    pair_internal_t *I;
+    int              src_fd;
+    int              dst_fd;
+    pg_xosh_t       *rng;
+} forward_arg_t;
+
+struct pair_internal {
     int                proxy_a;     /* paired with user fd_a; we read user→proxy bytes here */
     int                proxy_b;     /* paired with user fd_b; we write proxy→user bytes here */
     chaos_net_knobs_t  knobs;
     pthread_t          t_a_to_b;
     pthread_t          t_b_to_a;
     pg_xosh_t          rng_a, rng_b;
-    int                running;
-} pair_internal_t;
-
-typedef struct {
-    int        src_fd;
-    int        dst_fd;
-    pair_internal_t *I;
-    pg_xosh_t *rng;
-} forward_arg_t;
+    forward_arg_t      fa_a_to_b;   /* embedded — no separate malloc */
+    forward_arg_t      fa_b_to_a;
+};
 
 static double rand_unit(pg_xosh_t *r) {
     /* Map the top 53 bits of the RNG to [0, 1). */
@@ -46,11 +51,13 @@ static void apply_delay(pg_xosh_t *rng, uint64_t min_ns, uint64_t max_ns) {
 }
 
 static void *forward_fn(void *arg) {
-    forward_arg_t *fa  = (forward_arg_t *)arg;
-    pair_internal_t *I = fa->I;
-    char buf[4096];
+    forward_arg_t   *fa = (forward_arg_t *)arg;
+    pair_internal_t *I  = fa->I;
+    char             buf[4096];
 
-    while (I->running) {
+    /* Loop forever; close-of-user-fd by chaos_net_close drops EOF on the read,
+     * which is our termination signal. No flag needed. */
+    for (;;) {
         ssize_t n = read(fa->src_fd, buf, sizeof(buf));
         if (n <= 0) break;
 
@@ -83,7 +90,6 @@ static void *forward_fn(void *arg) {
 out:
     /* Closing the write side signals EOF to the user reader. */
     shutdown(fa->dst_fd, SHUT_WR);
-    free(fa);
     return NULL;
 }
 
@@ -103,7 +109,6 @@ int chaos_net_pair(chaos_pair_t *out, const chaos_net_knobs_t *k, uint64_t seed)
     I->knobs   = k ? *k : (chaos_net_knobs_t){0};
     I->proxy_a = sp1[1];
     I->proxy_b = sp2[0];
-    I->running = 1;
     pg_xosh_seed(&I->rng_a, seed ^ 0xA1A1A1A1A1A1A1A1ULL);
     pg_xosh_seed(&I->rng_b, seed ^ 0xB2B2B2B2B2B2B2B2ULL);
 
@@ -112,26 +117,23 @@ int chaos_net_pair(chaos_pair_t *out, const chaos_net_knobs_t *k, uint64_t seed)
     out->_internal  = I;
 
     /* A → B forwarder: read user_a (via proxy_a), write to proxy_b (-> user_b) */
-    forward_arg_t *fa = (forward_arg_t *)malloc(sizeof(*fa));
-    fa->src_fd = I->proxy_a;
-    fa->dst_fd = I->proxy_b;
-    fa->I      = I;
-    fa->rng    = &I->rng_a;
-    if (pthread_create(&I->t_a_to_b, NULL, forward_fn, fa) != 0) {
-        free(fa); free(I);
+    I->fa_a_to_b.I      = I;
+    I->fa_a_to_b.src_fd = I->proxy_a;
+    I->fa_a_to_b.dst_fd = I->proxy_b;
+    I->fa_a_to_b.rng    = &I->rng_a;
+    if (pthread_create(&I->t_a_to_b, NULL, forward_fn, &I->fa_a_to_b) != 0) {
+        free(I);
         close(sp1[0]); close(sp1[1]); close(sp2[0]); close(sp2[1]);
         return -1;
     }
 
     /* B → A forwarder */
-    forward_arg_t *fb = (forward_arg_t *)malloc(sizeof(*fb));
-    fb->src_fd = I->proxy_b;
-    fb->dst_fd = I->proxy_a;
-    fb->I      = I;
-    fb->rng    = &I->rng_b;
-    if (pthread_create(&I->t_b_to_a, NULL, forward_fn, fb) != 0) {
-        free(fb);
-        I->running = 0;
+    I->fa_b_to_a.I      = I;
+    I->fa_b_to_a.src_fd = I->proxy_b;
+    I->fa_b_to_a.dst_fd = I->proxy_a;
+    I->fa_b_to_a.rng    = &I->rng_b;
+    if (pthread_create(&I->t_b_to_a, NULL, forward_fn, &I->fa_b_to_a) != 0) {
+        /* tear down the first forwarder cleanly: closing proxy_a → A→B reads EOF */
         shutdown(I->proxy_a, SHUT_RDWR);
         pthread_join(I->t_a_to_b, NULL);
         free(I);
@@ -145,8 +147,8 @@ int chaos_net_pair(chaos_pair_t *out, const chaos_net_knobs_t *k, uint64_t seed)
 void chaos_net_close(chaos_pair_t *p) {
     if (!p || !p->_internal) return;
     pair_internal_t *I = (pair_internal_t *)p->_internal;
-    I->running = 0;
-    /* Closing the user fds drops EOF on the proxy reads, which terminates them. */
+    /* Closing the user fds cascades EOF to the proxy reads; the forwarders
+     * exit on EOF without needing a separate stop flag. */
     if (p->fd_a >= 0) { close(p->fd_a); p->fd_a = -1; }
     if (p->fd_b >= 0) { close(p->fd_b); p->fd_b = -1; }
     pthread_join(I->t_a_to_b, NULL);

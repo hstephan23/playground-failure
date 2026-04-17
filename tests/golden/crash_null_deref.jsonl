@@ -1,0 +1,5 @@
+{"kind":"phase","thread":0,"key":"","num":0,"text":"about to dereference NULL"}
+{"kind":"log","thread":0,"key":"","num":0,"text":"the runner's signal handler should catch SIGSEGV,"}
+{"kind":"log","thread":0,"key":"","num":0,"text":"emit PG_EV_FAULT(\"child crashed: SIGSEGV\"), and re-raise."}
+{"kind":"log","thread":0,"key":"","num":0,"text":"the parent TUI must survive."}
+{"kind":"child_crash","thread":0,"key":"","num":0,"text":"child crashed: SIGSEGV"}

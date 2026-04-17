@@ -10,7 +10,7 @@
  * At runtime, the parent process forks a child for each scenario run; the
  * scenario's run() function executes inside that child and emits events
  * through pg_emit / pg_logf / pg_count / pg_gauge / pg_expect / pg_actual /
- * pg_fault (declared in event.h). Any crash in the scenario stays inside
+ * pg_sut_fault (declared in event.h). Any crash in the scenario stays inside
  * the child — see runner.h. */
 
 #include <stddef.h>
@@ -41,6 +41,10 @@ typedef struct {
 
     int  (*init)    (pg_runctx_t *ctx, void **state);
     int  (*run)     (pg_runctx_t *ctx, void  *state);
+    /* Optional best-effort cleanup. Called only on the normal run path; not
+     * guaranteed to run if run() crashes (signal kills the child) or if the
+     * watchdog fires. Don't use for resources that outlive the scenario
+     * process — the OS will reclaim those anyway. */
     void (*teardown)(pg_runctx_t *ctx, void  *state);
     void (*explain) (pg_runctx_t *ctx, void  *state);
 } pg_scenario_t;

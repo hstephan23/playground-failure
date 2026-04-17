@@ -10,8 +10,8 @@
 static int df_run(pg_runctx_t *ctx, void *state) {
     (void)state;
 
-    int fd = chaos_io_open("/tmp/scratch", O_WRONLY);
-    if (fd < 0) { pg_fault(ctx, "chaos_io_open failed"); return 1; }
+    int fd = chaos_io_open("/tmp/scratch");
+    if (fd < 0) { pg_sut_fault(ctx, "chaos_io_open failed"); return 1; }
     chaos_io_set_quota(fd, 1024);   /* 1 KiB quota */
 
     pg_phase(ctx, "writing 64 chunks of 64 bytes; quota is 1024 bytes");

@@ -9,8 +9,8 @@
 static int pw_run(pg_runctx_t *ctx, void *state) {
     (void)state;
 
-    int fd = chaos_io_open("/tmp/scratch", O_WRONLY);
-    if (fd < 0) { pg_fault(ctx, "chaos_io_open failed"); return 1; }
+    int fd = chaos_io_open("/tmp/scratch");
+    if (fd < 0) { pg_sut_fault(ctx, "chaos_io_open failed"); return 1; }
     chaos_io_set_partial(fd, 137);   /* every write returns at most 137 */
 
     pg_phase(ctx, "naive call: write(fd, buf, 2048) -- expect 2048 back");

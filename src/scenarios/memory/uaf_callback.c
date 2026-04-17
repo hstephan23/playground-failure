@@ -15,7 +15,7 @@ typedef struct {
 static int uc_run(pg_runctx_t *ctx, void *state) {
     (void)state;
     chaos_arena_t *a = chaos_arena_create(64 * 1024, CHAOS_ARENA_REDZONES);
-    if (!a) { pg_fault(ctx, "arena create failed"); return 1; }
+    if (!a) { pg_sut_fault(ctx, "arena create failed"); return 1; }
 
     pg_phase(ctx, "alloc closure");
     closure_t *c = (closure_t *)chaos_arena_alloc(a, sizeof(*c));

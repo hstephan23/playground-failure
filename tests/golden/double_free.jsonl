@@ -1,0 +1,12 @@
+{"kind":"phase","thread":0,"key":"","num":0,"text":"alloc 128 bytes"}
+{"kind":"log","thread":0,"key":"","num":0,"text":"alloc returned 0xPTR"}
+{"kind":"phase","thread":0,"key":"","num":0,"text":"first free (legitimate)"}
+{"kind":"log","thread":0,"key":"","num":0,"text":"first free: rc=0  (0 = ok)"}
+{"kind":"phase","thread":0,"key":"","num":0,"text":"second free of the SAME pointer"}
+{"kind":"log","thread":0,"key":"","num":0,"text":"second free: rc=-1  (-1 = arena detected double-free)"}
+{"kind":"expect","thread":0,"key":"double_free_caught","num":1,"text":""}
+{"kind":"actual","thread":0,"key":"double_free_caught","num":1,"text":""}
+{"kind":"sut_fault","thread":0,"key":"","num":0,"text":"double-free detected"}
+{"kind":"log","thread":0,"key":"","num":0,"text":"with libc malloc this would corrupt the freelist; the next"}
+{"kind":"log","thread":0,"key":"","num":0,"text":"alloc could return a pointer someone else still uses."}
+{"kind":"done","thread":0,"key":"","num":0,"text":""}

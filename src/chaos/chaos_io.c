@@ -46,9 +46,8 @@ static io_slot_t *alloc_locked(int fd) {
     return NULL;
 }
 
-int chaos_io_open(const char *virtpath, int flags) {
+int chaos_io_open(const char *virtpath) {
     (void)virtpath;
-    (void)flags;
     char tmpl[] = "/tmp/playground.XXXXXX";
     int fd = mkstemp(tmpl);
     if (fd < 0) return -1;
@@ -182,5 +181,11 @@ void chaos_clock_skew_set(int64_t offset_ns) {
 void chaos_clock_jitter_set(uint64_t max_ns) {
     pthread_mutex_lock(&g_clock_mu);
     g_clock_jitter_max_ns = max_ns;
+    pthread_mutex_unlock(&g_clock_mu);
+}
+
+void chaos_clock_seed(uint64_t seed) {
+    pthread_mutex_lock(&g_clock_mu);
+    pg_xosh_seed(&g_clock_rng, seed);
     pthread_mutex_unlock(&g_clock_mu);
 }

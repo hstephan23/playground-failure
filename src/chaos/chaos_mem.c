@@ -1,5 +1,6 @@
 #include "playground/chaos_mem.h"
 
+#include <errno.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,7 +36,9 @@ static inline size_t block_total(size_t user_size) {
 }
 
 chaos_arena_t *chaos_arena_create(size_t bytes, unsigned flags) {
-    if (bytes < 4096) bytes = 4096;
+    /* Arenas hold one or more allocations including header + redzones; under
+     * 4096 bytes is too small to be useful and almost certainly a bug. */
+    if (bytes < 4096) { errno = EINVAL; return NULL; }
     chaos_arena_t *a = (chaos_arena_t *)calloc(1, sizeof(*a));
     if (!a) return NULL;
     void *m = mmap(NULL, bytes, PROT_READ | PROT_WRITE,

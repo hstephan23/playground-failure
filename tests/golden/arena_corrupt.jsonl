@@ -1,0 +1,9 @@
+{"kind":"phase","thread":0,"key":"","num":0,"text":"alloc 32 bytes (with 16B redzones front & back)"}
+{"kind":"phase","thread":0,"key":"","num":0,"text":"write 64 bytes — that's 32 bytes off the end"}
+{"kind":"phase","thread":0,"key":"","num":0,"text":"scan arena for redzone corruption"}
+{"kind":"expect","thread":0,"key":"redzones_corrupt","num":1,"text":""}
+{"kind":"actual","thread":0,"key":"redzones_corrupt","num":1,"text":""}
+{"kind":"sut_fault","thread":0,"key":"","num":0,"text":"out-of-bounds write detected by redzone scan"}
+{"kind":"log","thread":0,"key":"","num":0,"text":"without redzones, this write would silently corrupt the next allocation."}
+{"kind":"log","thread":0,"key":"","num":0,"text":"the bug would manifest as a crash or wrong value far from the cause."}
+{"kind":"done","thread":0,"key":"","num":0,"text":""}

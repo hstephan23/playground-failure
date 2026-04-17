@@ -64,3 +64,28 @@ add_executable(playground_run
     ${SCENARIO_SRC}
 )
 target_link_libraries(playground_run PRIVATE Threads::Threads)
+
+# ---- tests ----
+enable_testing()
+
+if(EXISTS ${CMAKE_SOURCE_DIR}/tests/unit)
+    foreach(name arena io net thread)
+        add_executable(test_${name}
+            tests/unit/test_${name}.c
+            ${CORE_SRC}
+            ${CHAOS_SRC}
+        )
+        target_link_libraries(test_${name} PRIVATE Threads::Threads)
+        add_test(NAME unit_${name} COMMAND test_${name})
+    endforeach()
+endif()
+
+if(EXISTS ${CMAKE_SOURCE_DIR}/tests/golden/run.sh)
+    add_test(
+        NAME golden
+        COMMAND ${CMAKE_SOURCE_DIR}/tests/golden/run.sh
+                $<TARGET_FILE:playground_run>
+                ${CMAKE_SOURCE_DIR}/tests/golden
+    )
+    set_tests_properties(golden PROPERTIES DEPENDS playground_run)
+endif()

@@ -1,0 +1,10 @@
+{"kind":"phase","thread":0,"key":"","num":0,"text":"alloc closure"}
+{"kind":"log","thread":0,"key":"","num":0,"text":"before free: secret=0xPTR refcount=1 name=\"callback-state\""}
+{"kind":"expect","thread":0,"key":"secret","num":51966,"text":""}
+{"kind":"phase","thread":0,"key":"","num":0,"text":"free closure (other code still holds the pointer)"}
+{"kind":"phase","thread":0,"key":"","num":0,"text":"use after free -- read the dangling pointer"}
+{"kind":"log","thread":0,"key":"","num":0,"text":"after free:  secret=0xPTR refcount=-555819298 name=\"ÞÞÞÞÞÞÞÞÞÞÞÞÞÞÞÞ\""}
+{"kind":"actual","thread":0,"key":"secret","num":57054,"text":""}
+{"kind":"log","thread":0,"key":"","num":0,"text":"the value silently changed; if `name` were the only valid string in a logger,"}
+{"kind":"log","thread":0,"key":"","num":0,"text":"you'd be writing 0xPTR garbage to disk and never know."}
+{"kind":"done","thread":0,"key":"","num":0,"text":""}

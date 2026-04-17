@@ -371,15 +371,17 @@ typedef struct { int cp; int attr; } style_t;
 
 static style_t style_for(pg_event_kind_t k) {
     switch (k) {
-    case PG_EV_LOG:     return (style_t){ CP_NORMAL, 0 };
-    case PG_EV_PHASE:   return (style_t){ CP_HEADER, A_BOLD };
-    case PG_EV_COUNTER: return (style_t){ CP_DIM,    0 };
-    case PG_EV_GAUGE:   return (style_t){ CP_DIM,    0 };
-    case PG_EV_EXPECT:  return (style_t){ CP_CHAOS,  0 };
-    case PG_EV_ACTUAL:  return (style_t){ CP_CHAOS,  A_BOLD };
-    case PG_EV_FAULT:   return (style_t){ CP_FAULT,  A_BOLD };
-    case PG_EV_DONE:    return (style_t){ CP_NORMAL, A_BOLD };
-    default:            return (style_t){ CP_NORMAL, 0 };
+    case PG_EV_LOG:         return (style_t){ CP_NORMAL, 0 };
+    case PG_EV_PHASE:       return (style_t){ CP_HEADER, A_BOLD };
+    case PG_EV_COUNTER:     return (style_t){ CP_DIM,    0 };
+    case PG_EV_GAUGE:       return (style_t){ CP_DIM,    0 };
+    case PG_EV_EXPECT:      return (style_t){ CP_CHAOS,  0 };
+    case PG_EV_ACTUAL:      return (style_t){ CP_CHAOS,  A_BOLD };
+    case PG_EV_SUT_FAULT:   return (style_t){ CP_FAULT,  A_BOLD };
+    case PG_EV_CHILD_CRASH: return (style_t){ CP_FAULT,  A_BOLD };
+    case PG_EV_WATCHDOG:    return (style_t){ CP_FAULT,  A_BOLD };
+    case PG_EV_DONE:        return (style_t){ CP_NORMAL, A_BOLD };
+    default:                return (style_t){ CP_NORMAL, 0 };
     }
 }
 
@@ -405,8 +407,14 @@ static void push_event(const pg_event_t *ev) {
     case PG_EV_ACTUAL:
         log_pushf(s.cp, s.attr, "%6.3f actual  %s = %lld", t, ev->key, (long long)ev->num);
         break;
-    case PG_EV_FAULT:
-        log_pushf(s.cp, s.attr, "%6.3f FAULT   %s", t, ev->text);
+    case PG_EV_SUT_FAULT:
+        log_pushf(s.cp, s.attr, "%6.3f SUT FAULT  %s", t, ev->text);
+        break;
+    case PG_EV_CHILD_CRASH:
+        log_pushf(s.cp, s.attr, "%6.3f CRASH      %s", t, ev->text);
+        break;
+    case PG_EV_WATCHDOG:
+        log_pushf(s.cp, s.attr, "%6.3f WATCHDOG   %s", t, ev->text);
         break;
     case PG_EV_DONE:
         log_pushf(s.cp, s.attr, "%6.3f done.", t);
