@@ -146,6 +146,7 @@ static int category_color(pg_category_t c) {
     case PG_CAT_MEMORY:      return CP_FAULT;
     case PG_CAT_NETWORK:     return CP_HEADER;
     case PG_CAT_TIMEIO:      return CP_NORMAL;
+    case PG_CAT_COMPOUND:    return CP_MATCH;   /* bright green for composites */
     default:                 return CP_NORMAL;
     }
 }

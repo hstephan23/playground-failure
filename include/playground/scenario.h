@@ -21,6 +21,8 @@ typedef enum {
     PG_CAT_MEMORY,
     PG_CAT_NETWORK,
     PG_CAT_TIMEIO,
+    PG_CAT_COMPOUND,   /* scenarios that combine two or more primitives to
+                          show how individually-survivable failures cascade */
     PG_CAT__COUNT
 } pg_category_t;
 

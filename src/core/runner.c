@@ -145,6 +145,7 @@ const char *pg_category_name(pg_category_t cat) {
     case PG_CAT_MEMORY:      return "memory";
     case PG_CAT_NETWORK:     return "network";
     case PG_CAT_TIMEIO:      return "timeio";
+    case PG_CAT_COMPOUND:    return "compound";
     case PG_CAT__COUNT:      break;
     }
     return "?";

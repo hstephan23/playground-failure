@@ -22,5 +22,10 @@ typedef struct {
  * and fd_b like ordinary stream sockets. Returns 0 on success, -1 on failure. */
 int  chaos_net_pair (chaos_pair_t *out, const chaos_net_knobs_t *k, uint64_t seed);
 
+/* Mutate knobs on a live pair. The forwarder threads observe the change on
+ * the next chunk. Use this to model time-varying chaos (e.g. a network
+ * partition that heals after N seconds). Thread-safe. */
+void chaos_net_set_knobs(chaos_pair_t *p, const chaos_net_knobs_t *k);
+
 /* Stop the proxy threads, close all fds, free internal state. */
 void chaos_net_close(chaos_pair_t *p);

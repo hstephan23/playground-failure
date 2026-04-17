@@ -26,6 +26,7 @@ struct pair_internal {
     int                proxy_a;     /* paired with user fd_a; we read user→proxy bytes here */
     int                proxy_b;     /* paired with user fd_b; we write proxy→user bytes here */
     chaos_net_knobs_t  knobs;
+    pthread_mutex_t    knobs_mu;    /* protects `knobs` against concurrent set + read */
     pthread_t          t_a_to_b;
     pthread_t          t_b_to_a;
     pg_xosh_t          rng_a, rng_b;
@@ -61,8 +62,14 @@ static void *forward_fn(void *arg) {
         ssize_t n = read(fa->src_fd, buf, sizeof(buf));
         if (n <= 0) break;
 
-        size_t chunk_max = I->knobs.max_chunk_bytes > 0
-            ? (size_t)I->knobs.max_chunk_bytes
+        /* Take a snapshot of knobs per incoming chunk so live mutation via
+         * chaos_net_set_knobs is picked up without racing. */
+        pthread_mutex_lock(&I->knobs_mu);
+        chaos_net_knobs_t k = I->knobs;
+        pthread_mutex_unlock(&I->knobs_mu);
+
+        size_t chunk_max = k.max_chunk_bytes > 0
+            ? (size_t)k.max_chunk_bytes
             : (size_t)n;
 
         size_t off = 0;
@@ -71,15 +78,15 @@ static void *forward_fn(void *arg) {
             if (this > chunk_max) this = chunk_max;
 
             /* loss */
-            if (I->knobs.loss_prob > 0.0) {
-                if (rand_unit(fa->rng) < I->knobs.loss_prob) {
+            if (k.loss_prob > 0.0) {
+                if (rand_unit(fa->rng) < k.loss_prob) {
                     off += this;
                     continue;
                 }
             }
             /* delay */
-            if (I->knobs.delay_max_ns > 0) {
-                apply_delay(fa->rng, I->knobs.delay_min_ns, I->knobs.delay_max_ns);
+            if (k.delay_max_ns > 0) {
+                apply_delay(fa->rng, k.delay_min_ns, k.delay_max_ns);
             }
 
             ssize_t w = write(fa->dst_fd, buf + off, this);
@@ -107,6 +114,7 @@ int chaos_net_pair(chaos_pair_t *out, const chaos_net_knobs_t *k, uint64_t seed)
         errno = ENOMEM; return -1;
     }
     I->knobs   = k ? *k : (chaos_net_knobs_t){0};
+    pthread_mutex_init(&I->knobs_mu, NULL);
     I->proxy_a = sp1[1];
     I->proxy_b = sp2[0];
     pg_xosh_seed(&I->rng_a, seed ^ 0xA1A1A1A1A1A1A1A1ULL);
@@ -144,6 +152,14 @@ int chaos_net_pair(chaos_pair_t *out, const chaos_net_knobs_t *k, uint64_t seed)
     return 0;
 }
 
+void chaos_net_set_knobs(chaos_pair_t *p, const chaos_net_knobs_t *k) {
+    if (!p || !p->_internal || !k) return;
+    pair_internal_t *I = (pair_internal_t *)p->_internal;
+    pthread_mutex_lock(&I->knobs_mu);
+    I->knobs = *k;
+    pthread_mutex_unlock(&I->knobs_mu);
+}
+
 void chaos_net_close(chaos_pair_t *p) {
     if (!p || !p->_internal) return;
     pair_internal_t *I = (pair_internal_t *)p->_internal;
@@ -155,6 +171,7 @@ void chaos_net_close(chaos_pair_t *p) {
     pthread_join(I->t_b_to_a, NULL);
     if (I->proxy_a >= 0) close(I->proxy_a);
     if (I->proxy_b >= 0) close(I->proxy_b);
+    pthread_mutex_destroy(&I->knobs_mu);
     free(I);
     p->_internal = NULL;
 }
